@@ -27,7 +27,7 @@ use sui_indexer_alt_framework::{
 
 use sui_types::{
     base_types::{ObjectID, SuiAddress}, 
-    transaction::TransactionDataAPI
+    transaction::{TransactionDataAPI, Command, TransactionKind}
 };
 
 use crate::models::MyIndexData;
@@ -147,6 +147,7 @@ impl Processor for IndexerPipeline {
             info!("  Transaction has {} move calls", move_calls.len());
             
             let mut package_matched = false;
+            let mut matched_calls = Vec::new();
             
             for (j, call) in move_calls.iter().enumerate() {
                 let package_id = &call.0;
@@ -160,7 +161,11 @@ impl Processor for IndexerPipeline {
                     info!("  MATCH FOUND! Transaction {} uses target package in module {}, function {}", 
                           tx_digest, module_name, function_name);
                     package_matched = true;
-                    break;
+                    matched_calls.push(serde_json::json!({
+                        "package_id": package_id.to_string(),
+                        "module": module_name,
+                        "function": function_name
+                    }));
                 }
             }
             
@@ -169,10 +174,41 @@ impl Processor for IndexerPipeline {
                 continue;
             }
 
-            // Once we find a matching package, create a transaction record
+            // Create a structured JSON object for tx_kind
             let tx_data = tx.transaction.transaction_data();
-            let kind = format!("{:?}", tx_data.kind());
-            let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number as i64;
+            let kind_json = match tx_data.kind() {
+                sui_types::transaction::TransactionKind::ProgrammableTransaction(pt) => {
+                    serde_json::json!({
+                        "type": "ProgrammableTransaction",
+                        "matched_calls": matched_calls,
+                        "total_move_calls": move_calls.len(),
+                        "inputs": pt.inputs,
+                        "commands": pt.commands.iter().map(|cmd| {
+                            match cmd {
+                                Command::MoveCall(call) => {
+                                    serde_json::json!({
+                                        "type": "MoveCall",
+                                        "package": call.package.to_string(),
+                                        "module": call.module.to_string(),
+                                        "function": call.function.to_string(),
+                                    })
+                                },
+                                Command::TransferObjects(_, _) => serde_json::json!({"type": "TransferObjects"}),
+                                Command::SplitCoins(_, _) => serde_json::json!({"type": "SplitCoins"}),
+                                Command::MergeCoins(_, _) => serde_json::json!({"type": "MergeCoins"}),
+                                Command::Publish(_, _) => serde_json::json!({"type": "Publish"}),
+                                Command::MakeMoveVec(_, _) => serde_json::json!({"type": "MakeMoveVec"}),
+                                Command::Upgrade(_, _, _, _) => serde_json::json!({"type": "Upgrade"}),
+                            }
+                        }).collect::<Vec<_>>()
+                    })
+                },
+                other => serde_json::json!({
+                    "type": format!("{:?}", other),
+                    "matched_calls": matched_calls,
+                    "total_move_calls": move_calls.len(),
+                })
+            };
             
             // Serialize the full transaction for storage
             let serialized_tx = serde_json::to_value(&tx.transaction).unwrap_or_default();
@@ -180,9 +216,9 @@ impl Processor for IndexerPipeline {
             // Create the transaction record
             let transaction_record = models::Transaction::new(
                 tx_digest,
-                checkpoint_seq,
+                checkpoint.checkpoint_summary.sequence_number as i64,
                 sender,
-                kind,
+                kind_json,
                 tx_data.gas_budget() as i64,
                 tx_data.gas_price() as i64,
                 serialized_tx

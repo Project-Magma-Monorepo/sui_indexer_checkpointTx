@@ -3,7 +3,7 @@ CREATE TABLE transactions (
     tx_digest VARCHAR PRIMARY KEY,
     checkpoint_sequence_number BIGINT NOT NULL,
     sender VARCHAR NOT NULL,
-    tx_kind VARCHAR NOT NULL,
+    tx_kind JSONB NOT NULL,
     gas_budget BIGINT NOT NULL,
     gas_price BIGINT NOT NULL,
     serialized_tx JSONB NOT NULL,
@@ -24,4 +24,4 @@ CREATE TABLE checkpoint_transactions (
 -- Create indexes for efficient queries
 CREATE INDEX idx_transactions_checkpoint ON transactions(checkpoint_sequence_number);
 CREATE INDEX idx_transactions_sender ON transactions(sender);
-CREATE INDEX idx_transactions_kind ON transactions(tx_kind); 
+CREATE INDEX idx_transactions_kind ON transactions USING GIN (tx_kind);

@@ -30,7 +30,7 @@ diesel::table! {
         tx_digest -> Varchar,
         checkpoint_sequence_number -> Int8,
         sender -> Varchar,
-        tx_kind -> Varchar,
+        tx_kind -> Jsonb,
         gas_budget -> Int8,
         gas_price -> Int8,
         serialized_tx -> Jsonb,
