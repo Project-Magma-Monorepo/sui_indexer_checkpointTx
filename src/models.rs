@@ -1,4 +1,3 @@
-use std::time::SystemTime;
 use diesel::prelude::*;
 use diesel::sql_types::*;
 use diesel::serialize::{ToSql, Output, IsNull};
@@ -6,6 +5,9 @@ use diesel::deserialize::{FromSql, FromSqlRow};
 use diesel::pg::Pg;
 use serde::{Deserialize, Serialize};
 use sui_indexer_alt_framework::FieldCount;
+use chrono::NaiveDateTime;
+
+use serde_json::Value;
 
 #[derive(Debug, Clone, Queryable, Insertable, Serialize, Deserialize, FieldCount)]
 #[diesel(table_name = crate::schema::my_index_data)]
@@ -20,12 +22,11 @@ pub struct Transaction {
     pub tx_digest: String,
     pub checkpoint_sequence_number: i64,
     pub sender: String,
-    pub tx_kind: serde_json::Value,
+    pub tx_kind: Value,
     pub gas_budget: i64,
     pub gas_price: i64,
-    pub serialized_tx: serde_json::Value,
-    #[diesel(column_name = created_at, skip_insertion)]
-    pub created_at: Option<SystemTime>,
+    pub serialized_tx: Value,
+    pub created_at: Option<NaiveDateTime>,
 }
 
 #[derive(Debug, Clone, Queryable, Insertable, Serialize, Deserialize, FieldCount)]
@@ -37,8 +38,39 @@ pub struct CheckpointTransaction {
     pub transaction_events_digest: Option<String>,
     pub input_objects_digest: Option<String>,
     pub output_objects_digest: Option<String>,
-    #[diesel(column_name = created_at, skip_insertion)]
-    pub created_at: Option<SystemTime>,
+    pub created_at: Option<NaiveDateTime>,
+}
+
+#[derive(Debug, Clone, Queryable, Insertable, Serialize, Deserialize, FieldCount)]
+#[diesel(table_name = crate::schema::transaction_effects)]
+pub struct TransactionEffect {
+    pub tx_digest: String,
+    pub effects_json: Value,
+    pub created_at: Option<NaiveDateTime>,
+}
+
+#[derive(Debug, Clone, Queryable, Insertable, Serialize, Deserialize, FieldCount)]
+#[diesel(table_name = crate::schema::transaction_events)]
+pub struct TransactionEvent {
+    pub tx_digest: String,
+    pub events_json: Value,
+    pub created_at: Option<NaiveDateTime>,
+}
+
+#[derive(Debug, Clone, Queryable, Insertable, Serialize, Deserialize, FieldCount)]
+#[diesel(table_name = crate::schema::input_objects)]
+pub struct InputObjects {
+    pub tx_digest: String,
+    pub objects_json: Value,
+    pub created_at: Option<NaiveDateTime>,
+}
+
+#[derive(Debug, Clone, Queryable, Insertable, Serialize, Deserialize, FieldCount)]
+#[diesel(table_name = crate::schema::output_objects)]
+pub struct OutputObjects {
+    pub tx_digest: String,
+    pub objects_json: Value,
+    pub created_at: Option<NaiveDateTime>,
 }
 
 impl Transaction {
@@ -46,10 +78,10 @@ impl Transaction {
         tx_digest: String,
         checkpoint_sequence_number: i64,
         sender: String,
-        tx_kind: serde_json::Value,
+        tx_kind: Value,
         gas_budget: i64,
         gas_price: i64,
-        serialized_tx: serde_json::Value,
+        serialized_tx: Value,
     ) -> Self {
         Self {
             tx_digest,

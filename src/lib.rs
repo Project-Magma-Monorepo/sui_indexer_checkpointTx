@@ -10,6 +10,8 @@ use tracing::info;
 pub mod schema;
 pub mod models;
 
+use crate::models::{MyIndexData, Transaction, TransactionEffect, TransactionEvent, InputObjects, OutputObjects};
+
 // Embed the migrations in the library
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
@@ -29,8 +31,6 @@ use sui_types::{
     base_types::{ObjectID, SuiAddress}, 
     transaction::{TransactionDataAPI, Command, TransactionKind}
 };
-
-use crate::models::MyIndexData;
 
 // Enum to specify which fields to index
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -121,7 +121,7 @@ impl IndexerPipeline {
 
 impl Processor for IndexerPipeline {
     const NAME: &'static str = "indexer_pipeline";
-    type Value = models::Transaction;
+    type Value = TransactionWithEffects;
 
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         info!("Processing checkpoint: {}", checkpoint.checkpoint_summary.sequence_number);
@@ -215,7 +215,7 @@ impl Processor for IndexerPipeline {
             
             // Create the transaction record
             let transaction_record = models::Transaction::new(
-                tx_digest,
+                tx_digest.clone(),
                 checkpoint.checkpoint_summary.sequence_number as i64,
                 sender,
                 kind_json,
@@ -224,7 +224,42 @@ impl Processor for IndexerPipeline {
                 serialized_tx
             );
             
-            results.push(transaction_record);
+            // Extract transaction effects
+            let effects_json = serde_json::to_value(&tx.effects).unwrap_or_default();
+            let effects_record = TransactionEffect {
+                tx_digest: tx_digest.clone(),
+                effects_json,
+                created_at: None,
+            };
+
+            // Extract transaction events
+            let events_record = tx.events.as_ref().map(|events| TransactionEvent {
+                tx_digest: tx_digest.clone(),
+                events_json: serde_json::to_value(events).unwrap_or_default(),
+                created_at: None,
+            });
+
+            // Extract input objects
+            let input_objects_record = Some(InputObjects {
+                tx_digest: tx_digest.clone(),
+                objects_json: serde_json::to_value(&tx.input_objects).unwrap_or_default(),
+                created_at: None,
+            });
+
+            // Extract output objects
+            let output_objects_record = Some(OutputObjects {
+                tx_digest: tx_digest.clone(),
+                objects_json: serde_json::to_value(&tx.output_objects).unwrap_or_default(),
+                created_at: None,
+            });
+            
+            results.push(TransactionWithEffects {
+                transaction: transaction_record,
+                effects: effects_record,
+                events: events_record,
+                input_objects: input_objects_record,
+                output_objects: output_objects_record,
+            });
         }
         
         info!("Finished processing checkpoint {}, found {} matching transactions", 
@@ -247,15 +282,70 @@ impl ConcurrentHandler for IndexerPipeline {
         use crate::schema::transactions;
         
         let inserted = diesel::insert_into(transactions::table)
-            .values(values)
+            .values(values.iter().map(|v| &v.transaction).collect::<Vec<_>>())
             .on_conflict_do_nothing()
             .execute(conn)
             .await
             .map_err(|e| anyhow::anyhow!("Failed to insert transaction records: {}", e))?;
         
         info!("Successfully inserted {} transaction records", inserted);
+
+        // Insert transaction effects
+        for value in values {
+            use crate::schema::transaction_effects;
+            
+            diesel::insert_into(transaction_effects::table)
+                .values(&value.effects)
+                .on_conflict_do_nothing()
+                .execute(conn)
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to insert effects record: {}", e))?;
+
+            // Insert events if present
+            if let Some(events) = &value.events {
+                use crate::schema::transaction_events;
+                diesel::insert_into(transaction_events::table)
+                    .values(events)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to insert events record: {}", e))?;
+            }
+
+            // Insert input objects
+            if let Some(input_objects) = &value.input_objects {
+                use crate::schema::input_objects;
+                diesel::insert_into(input_objects::table)
+                    .values(input_objects)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to insert input objects record: {}", e))?;
+            }
+
+            // Insert output objects
+            if let Some(output_objects) = &value.output_objects {
+                use crate::schema::output_objects;
+                diesel::insert_into(output_objects::table)
+                    .values(output_objects)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to insert output objects record: {}", e))?;
+            }
+        }
+        
         Ok(inserted)
     }
+}
+
+#[derive(Debug, Clone, FieldCount)]
+pub struct TransactionWithEffects {
+    pub transaction: Transaction,
+    pub effects: TransactionEffect,
+    pub events: Option<TransactionEvent>,
+    pub input_objects: Option<InputObjects>,
+    pub output_objects: Option<OutputObjects>,
 }
 
 

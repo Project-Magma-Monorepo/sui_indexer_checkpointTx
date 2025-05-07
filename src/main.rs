@@ -39,9 +39,10 @@ async fn main() -> Result<()> {
     // Set the package address to track
     indexer.set_filter_package(args.package_address);
     
-    // We only care about transactions now
+    // We want to track both transactions and their effects
     indexer.set_filter_fields(vec![
         IndexField::Transaction,
+        IndexField::Effects,
     ]);
     
     // Start indexing with the database URL and cluster args

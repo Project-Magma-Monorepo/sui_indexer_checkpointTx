@@ -21,7 +21,37 @@ CREATE TABLE checkpoint_transactions (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Create transaction_effects table to store effects_json
+CREATE TABLE transaction_effects (
+    tx_digest VARCHAR PRIMARY KEY REFERENCES transactions(tx_digest) ON DELETE CASCADE,
+    effects_json JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create transaction_events table to store events data
+CREATE TABLE transaction_events (
+    tx_digest VARCHAR PRIMARY KEY REFERENCES transactions(tx_digest) ON DELETE CASCADE,
+    events_json JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create input_objects table to store all input objects as a JSON array
+CREATE TABLE input_objects (
+    tx_digest VARCHAR PRIMARY KEY REFERENCES transactions(tx_digest) ON DELETE CASCADE,
+    objects_json JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create output_objects table to store all output objects as a JSON array
+CREATE TABLE output_objects (
+    tx_digest VARCHAR PRIMARY KEY REFERENCES transactions(tx_digest) ON DELETE CASCADE,
+    objects_json JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Create indexes for efficient queries
 CREATE INDEX idx_transactions_checkpoint ON transactions(checkpoint_sequence_number);
 CREATE INDEX idx_transactions_sender ON transactions(sender);
 CREATE INDEX idx_transactions_kind ON transactions USING GIN (tx_kind);
+CREATE INDEX idx_input_objects_tx_digest ON input_objects(tx_digest);
+CREATE INDEX idx_output_objects_tx_digest ON output_objects(tx_digest);

@@ -17,9 +17,49 @@ diesel::table! {
 diesel::table! {
     use diesel::sql_types::*;
 
+    input_objects (tx_digest) {
+        tx_digest -> Varchar,
+        objects_json -> Jsonb,
+        created_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+
     my_index_data (id) {
         id -> Varchar,
         checkpoint_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+
+    output_objects (tx_digest) {
+        tx_digest -> Varchar,
+        objects_json -> Jsonb,
+        created_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+
+    transaction_effects (tx_digest) {
+        tx_digest -> Varchar,
+        effects_json -> Jsonb,
+        created_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+
+    transaction_events (tx_digest) {
+        tx_digest -> Varchar,
+        events_json -> Jsonb,
+        created_at -> Nullable<Timestamptz>,
     }
 }
 
@@ -38,8 +78,17 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(input_objects -> transactions (tx_digest));
+diesel::joinable!(output_objects -> transactions (tx_digest));
+diesel::joinable!(transaction_effects -> transactions (tx_digest));
+diesel::joinable!(transaction_events -> transactions (tx_digest));
+
 diesel::allow_tables_to_appear_in_same_query!(
     checkpoint_transactions,
+    input_objects,
     my_index_data,
+    output_objects,
+    transaction_effects,
+    transaction_events,
     transactions,
 );
