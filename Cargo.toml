@@ -1,0 +1,25 @@
+[package]
+name = "sui-indexer-generic"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1.61"
+clap = { version = "4.4", features = ["derive"] }
+diesel = { version = "2.2", features = ["postgres", "serde_json", "chrono"] }
+diesel_migrations = { version = "2.2", features = ["postgres"] }
+diesel-async = { version = "0.5", features = ["postgres"] }
+tokio = "1.36.0"
+url = "2.3.1"
+serde_json = "1.0"
+hex = "0.4.3"
+serde = { version = "1.0", features = ["derive"] }
+bcs = "0.1.6"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+chrono = { version = "0.4", features = ["serde"] }
+
+sui-indexer-alt-framework = { git = "https://github.com/MystenLabs/sui.git", rev = "76ea0f37cde3ff6656edb933edde02a53bd00999" }
+sui-types = { git = "https://github.com/MystenLabs/sui.git", rev = "76ea0f37cde3ff6656edb933edde02a53bd00999" }
+move-core-types = { git = "https://github.com/MystenLabs/sui.git", rev = "76ea0f37cde3ff6656edb933edde02a53bd00999" }
